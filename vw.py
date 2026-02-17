@@ -238,22 +238,22 @@ USAGE EXAMPLES:
 ===============
 
 1. Generate XSS payloads with URL encoding:
-   python payload_gen.py --module xss --encode url
+   python vw.py --module xss --encode url
 
 2. Generate MySQL SQLi payloads and export to JSON:
-   python payload_gen.py --module sqli --db mysql --output sqli_payloads.json
+   python vw.py --module sqli --db mysql --output sqli_payloads.json
 
 3. Generate all payloads with Base64 encoding:
-   python payload_gen.py --module all --encode base64 --output all_payloads.txt --format txt
+   python vw.py --module all --encode base64 --output all_payloads.txt --format txt
 
 4. Generate Windows command injection patterns:
-   python payload_gen.py --module cmdi --os windows --output cmdi.json
+   python vw.py --module cmdi --os windows --output cmdi.json
 
 5. Generate obfuscated XSS payloads:
-   python payload_gen.py --module xss --obfuscate comment --output obf_xss.json
+   python vw.py --module xss --obfuscate comment --output obf_xss.json
 
 6. Export for Burp Suite integration:
-   python payload_gen.py --module sqli --burp --output burp_payloads.json
+   python vw.py --module sqli --burp --output burp_payloads.json
 
 ETHICAL REMINDER:
 =================
