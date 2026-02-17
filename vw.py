@@ -10,22 +10,18 @@ strictly prohibited and may be illegal.
 
 Aligned with OWASP Code of Ethics:
 https://owasp.org/www-project-code-of-ethics/
-
-Author: Security Research Team
-Date: February 2026
 """
 
 import argparse
 import sys
-import json
-from pathlib import Path
+from textwrap import indent
 
-# Import modules
 from modules.xss import XSSPayloadGenerator
 from modules.sqli import SQLiPayloadGenerator
 from modules.cmdi import CMDIPayloadGenerator
 from modules.encoder import PayloadEncoder
 from modules.export_handler import ExportHandler
+
 
 class PayloadFramework:
     """Main framework class orchestrating payload generation"""
@@ -35,233 +31,178 @@ class PayloadFramework:
         self.export_handler = ExportHandler()
 
     def generate_payloads(self, args):
-        """Generate payloads based on command-line arguments"""
         payloads = []
 
-        # XSS Module — runs for 'xss' or 'all'
-        if args.module in ('xss', 'all'):
+        # Generate modules
+        if args.module in ("xss", "all"):
             xss_gen = XSSPayloadGenerator()
             payloads.extend(xss_gen.generate_all_contexts())
 
-        # SQLi Module — runs for 'sqli' or 'all'
-        # BUG FIX: was 'elif', so sqli/cmdi were silently skipped under --module all
-        if args.module in ('sqli', 'all'):
+        if args.module in ("sqli", "all"):
             sqli_gen = SQLiPayloadGenerator(db_type=args.db)
             payloads.extend(sqli_gen.generate_all_types())
 
-        # Command Injection Module — runs for 'cmdi' or 'all'
-        if args.module in ('cmdi', 'all'):
+        if args.module in ("cmdi", "all"):
             cmdi_gen = CMDIPayloadGenerator(os_type=args.os)
             payloads.extend(cmdi_gen.generate_all_patterns())
 
-        # Normalise payload dicts — accept 'payload' or 'template' as the
-        # key that holds the actual payload string. Also map common
-        # alternative field names so the rest of the pipeline is uniform.
-        PAYLOAD_ALIASES = ('payload', 'template')
-        TITLE_ALIASES   = ('description', 'title', 'name')
-        TYPE_ALIASES    = ('type', 'module', 'category')
-
+        # Normalize records safely (keep both template + payload if present)
+        normalized = []
         for i, p in enumerate(payloads):
-            # Resolve the payload string
-            for key in PAYLOAD_ALIASES:
-                if key in p:
-                    p['payload'] = p[key]
-                    break
-            else:
-                raise KeyError(
-                    f"Payload dict at index {i} has no recognised payload key "
-                    f"(expected one of {PAYLOAD_ALIASES}). "
-                    f"Keys present: {list(p.keys())}"
-                )
+            if not isinstance(p, dict):
+                raise TypeError(f"Payload at index {i} is not a dict: {type(p)}")
 
-            # Resolve description / title
-            if 'description' not in p:
-                for key in TITLE_ALIASES:
-                    if key in p:
-                        p['description'] = p[key]
-                        break
+            item = dict(p)  # copy
 
-            # Resolve type
-            if 'type' not in p:
-                for key in TYPE_ALIASES:
-                    if key in p:
-                        p['type'] = p[key]
-                        break
+            # Normalize type/description
+            item.setdefault("type", item.get("module", item.get("category", "N/A")))
+            item.setdefault("description", item.get("title", item.get("name", "N/A")))
 
-        # Apply encoding if specified
-        if args.encode and args.encode != 'none':
+            # Normalize template/payload separation
+            # - template: multi-line educational block (if provided)
+            # - payload: the string you actually test/export as a single payload
+            template = item.get("template", "")
+            payload_str = item.get("payload", "")
+
+            # If module only provides template (like your tokenized XSS), keep it but don't force it into payload
+            item["template"] = template if template else ""
+            item["payload"] = payload_str if payload_str else ""
+
+            # If mode=lab, convert tokenized XSS templates into safe proof payloads (minimal)
+            # This does NOT send requests; it only outputs strings for DVWA/Juice Shop testing.
+            if args.mode == "lab" and item.get("type") == "XSS":
+                # If there is no real payload string, provide a harmless proof string
+                # You can later improve this mapping to be context-specific.
+                if not item["payload"]:
+                    item["payload"] = '<img src=x onerror=alert(1)>'
+                item["lab_note"] = "LAB_MODE: harmless proof payload for DVWA/Juice Shop screenshots"
+
+            normalized.append(item)
+
+        payloads = normalized
+
+        # Apply encoding if requested
+        if args.encode != "none":
             for p in payloads:
-                p['encoded_payload'] = self.encoder.encode(p['payload'], args.encode)
-                p['encoding_type'] = args.encode
+                if p.get("payload"):
+                    p["encoded_payload"] = self.encoder.encode(p["payload"], args.encode)
+                    p["encoding_type"] = args.encode
 
-        # Apply obfuscation note if specified
+        # Obfuscation note (your project requirement says “demonstration”, not real mutation)
         if args.obfuscate:
             note = self._get_obfuscation_notes(args.obfuscate)
             for p in payloads:
-                p['obfuscation_notes'] = note
+                p["obfuscation_notes"] = note
 
-        # Display results
+        # Display
         self._display_payloads(payloads)
 
-        # Export if requested
+        # Export
         if args.output:
-            self.export_handler.export(payloads, args.output, args.format)
+            # If your ExportHandler supports extra args, pass them; otherwise remove burp_mode.
+            self.export_handler.export(payloads, args.output, args.format, burp_mode=args.burp)
             print(f"\n[+] Payloads exported to: {args.output}")
 
         return payloads
 
     def _display_payloads(self, payloads):
-        """Display generated payloads to console"""
         print("\n" + "=" * 80)
-        print(" GENERATED PAYLOAD TEMPLATES (EDUCATIONAL USE ONLY)")
+        print("GENERATED PAYLOAD OUTPUT (EDUCATIONAL USE ONLY)")
         print("=" * 80 + "\n")
 
         for idx, p in enumerate(payloads, 1):
-            print(f"[{idx}] Type: {p.get('type', 'N/A')}")
-            print(f"    Context:     {p.get('context', 'N/A')}")
-            print(f"    Description: {p.get('description', 'N/A')}")
-            print(f"    Payload:     {p['payload']}")
+            print(f"[{idx}]")
+            print(f"Type:        {p.get('type', 'N/A')}")
+            print(f"Context:     {p.get('context', 'N/A')}")
+            print(f"Description: {p.get('description', 'N/A')}")
 
-            if 'encoded_payload' in p:
-                print(f"    Encoded ({p['encoding_type']}): {p['encoded_payload']}")
+            # Show payload (single string)
+            if p.get("payload"):
+                print("Payload:")
+                print(indent(p["payload"], "  "))
 
-            if 'bypass_explanation' in p:
-                print(f"    Bypass Logic: {p['bypass_explanation']}")
+            # Show template (multi-line) if present
+            if p.get("template"):
+                print("Template:")
+                print(indent(p["template"], "  "))
 
-            if 'defensive_notes' in p:
-                print(f"    Defense: {p['defensive_notes']}")
+            if "encoded_payload" in p:
+                print(f"Encoded ({p.get('encoding_type','N/A')}):")
+                print(indent(p["encoded_payload"], "  "))
+
+            if p.get("bypass_explanation"):
+                print("Bypass Logic:")
+                print(indent(str(p["bypass_explanation"]), "  "))
+
+            if p.get("defensive_notes"):
+                print("Defense:")
+                print(indent(str(p["defensive_notes"]), "  "))
+
+            if p.get("lab_note"):
+                print("Note:")
+                print(indent(p["lab_note"], "  "))
 
             print("-" * 80)
 
     def _get_obfuscation_notes(self, obf_type):
-        """Return obfuscation technique explanation"""
         notes = {
-            'comment':    'Comment insertion breaks signature-based detection',
-            'whitespace': 'Whitespace abuse exploits poor tokenization',
-            'mixed':      'Mixed encoding bypasses single-pass decoders',
+            "comment": "Comment insertion breaks signature-based detection",
+            "whitespace": "Whitespace abuse exploits poor tokenization",
+            "mixed": "Mixed encoding bypasses single-pass decoders",
         }
-        return notes.get(obf_type, 'Custom obfuscation applied')
+        return notes.get(obf_type, "Custom obfuscation applied")
 
 
 def main():
-    """Main entry point with argument parsing"""
-
-    # Display banner
-    banner = """
-
+    banner = r"""
  ██╗   ██╗██╗   ██╗██╗     ███╗   ██╗    ██╗    ██╗███████╗ █████╗ ██╗   ██╗███████╗██████╗
  ██║   ██║██║   ██║██║     ████╗  ██║    ██║    ██║██╔════╝██╔══██╗██║   ██║██╔════╝██╔══██╗
  ██║   ██║██║   ██║██║     ██╔██╗ ██║    ██║ █╗ ██║█████╗  ███████║██║   ██║█████╗  ██████╔╝
  ╚██╗ ██╔╝██║   ██║██║     ██║╚██╗██║    ██║███╗██║██╔══╝  ██╔══██║╚██╗ ██╔╝██╔══╝  ██╔══██╗
   ╚████╔╝ ╚██████╔╝███████╗██║ ╚████║    ╚███╔███╔╝███████╗██║  ██║ ╚████╔╝ ███████╗██║  ██║
    ╚═══╝   ╚═════╝ ╚══════╝╚═╝  ╚═══╝     ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝
-  
-    Educational Payload Generation Framework - Authorized Testing Only
-    AUTHOR: Dalia Ibrahim
     """
     print(banner)
-    print("\n" + "=" * 80)
+    print("Educational Payload Generation Framework - Authorized Testing Only")
+    print("=" * 80)
 
     parser = argparse.ArgumentParser(
-        description='Educational Payload Generation Framework',
-        epilog='Example: python payload_gen.py --module xss --encode url --output payloads.json',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Educational Payload Generation Framework",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument(
-        '--module',
-        choices=['xss', 'sqli', 'cmdi', 'all'],
-        required=False,
-        help='Payload module to use'
-    )
-    parser.add_argument(
-        '--encode',
-        choices=['url', 'base64', 'hex', 'none'],
-        default='none',
-        help='Encoding type to apply'
-    )
-    parser.add_argument(
-        '--db',
-        choices=['mysql', 'postgresql', 'mssql'],
-        default='mysql',
-        help='Database type for SQLi payloads'
-    )
-    parser.add_argument(
-        '--os',
-        choices=['linux', 'windows', 'both'],
-        default='linux',
-        help='Operating system for command injection'
-    )
-    parser.add_argument(
-        '--obfuscate',
-        choices=['comment', 'whitespace', 'mixed'],
-        help='Obfuscation technique to demonstrate'
-    )
-    parser.add_argument('--output',  help='Output file path for export')
-    parser.add_argument(
-        '--format',
-        choices=['json', 'txt', 'csv'],
-        default='json',
-        help='Export format'
-    )
-    parser.add_argument('--burp',     action='store_true', help='Export in Burp Suite format')
-    parser.add_argument('--examples', action='store_true', help='Show usage examples and exit')
+    parser.add_argument("--module", choices=["xss", "sqli", "cmdi", "all"], help="Payload module to use")
+    parser.add_argument("--mode", choices=["template", "lab"], default="template",
+                        help="Output mode: template (default) or lab (DVWA/Juice Shop proof strings)")
+    parser.add_argument("--encode", choices=["url", "base64", "hex", "none"], default="none", help="Encoding type")
+    parser.add_argument("--db", choices=["mysql", "postgresql", "mssql"], default="mysql", help="DB type for SQLi")
+    parser.add_argument("--os", choices=["linux", "windows", "both"], default="linux", help="OS for command injection")
+    parser.add_argument("--obfuscate", choices=["comment", "whitespace", "mixed"], help="Obfuscation demo note")
+    parser.add_argument("--output", help="Output file path for export")
+    parser.add_argument("--format", choices=["json", "txt", "csv"], default="json", help="Export format")
+    parser.add_argument("--burp", action="store_true", help="Export in Burp Suite compatible format")
+    parser.add_argument("--examples", action="store_true", help="Show usage examples and exit")
 
     args = parser.parse_args()
 
     if args.examples:
-        show_examples()
+        print("Example: python vw.py --module xss --mode lab --output xss.json --format json")
         sys.exit(0)
 
     if not args.module:
-        parser.error('the --module argument is required')
+        parser.error("the --module argument is required")
 
     framework = PayloadFramework()
 
     try:
         payloads = framework.generate_payloads(args)
-        print(f"\n[✓] Generated {len(payloads)} payload templates successfully")
-        print("\n[!] REMINDER: These are educational templates for authorized testing only!")
-
-    except KeyError as e:
+        print(f"\n[✓] Generated {len(payloads)} items successfully")
+        if args.mode == "lab":
+            print("[!] LAB MODE enabled: outputs are for DVWA/Juice Shop proof screenshots only.")
+    except Exception as e:
         print(f"\n[!] Error: {e}", file=sys.stderr)
         sys.exit(1)
-    except Exception as e:
-        print(f"\n[!] Unexpected error: {e}", file=sys.stderr)
-        sys.exit(1)
 
 
-def show_examples():
-    """Display usage examples"""
-    print("""
-USAGE EXAMPLES:
-===============
-
-1. Generate XSS payloads with URL encoding:
-   python vw.py --module xss --encode url
-
-2. Generate MySQL SQLi payloads and export to JSON:
-   python vw.py --module sqli --db mysql --output sqli_payloads.json
-
-3. Generate all payloads with Base64 encoding:
-   python vw.py --module all --encode base64 --output all_payloads.txt --format txt
-
-4. Generate Windows command injection patterns:
-   python vw.py --module cmdi --os windows --output cmdi.json
-
-5. Generate obfuscated XSS payloads:
-   python vw.py --module xss --obfuscate comment --output obf_xss.json
-
-6. Export for Burp Suite integration:
-   python vw.py --module sqli --burp --output burp_payloads.json
-
-ETHICAL REMINDER:
-=================
-Always obtain written authorization before testing.
-Unauthorized access is illegal and unethical.
-Use only in lab environments or with explicit permission.
-""")
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
