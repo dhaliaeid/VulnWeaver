@@ -12,13 +12,7 @@ How WAFs and input filters respond
 Why naive filtering fails
 How modern defenses mitigate these attacks
 This tool does NOT send live attack traffic.
-It generates payload templates and controlled lab-mode proof strings for authorized security testing environments such as:
-DVWA (Damn Vulnerable Web Application)
-OWASP Juice Shop
-The project aligns with:
-OWASP Testing Guide
-OWASP Code of Ethics
-PortSwigger Web Security Academy methodology
+It generates payload templates
 
 ## Project Objectives
 
@@ -30,7 +24,6 @@ Encoding demonstrations
 Obfuscation logic
 Export support (JSON / TXT / CSV)
 Burp Intruder compatible export
-Lab mode for controlled validation in vulnerable test environments
 
 ## Usage Guide
 
@@ -40,7 +33,7 @@ This section explains how to install, configure, and properly use VulnWeaver in 
 
 Python 3.7+
 Kali Linux (recommended) or any Linux/macOS/Windows environment
-DVWA or OWASP Juice Shop (for lab validation)
+DVWA or OWASP Juice Shop (for testing)
 
 #### Installation
 
@@ -67,6 +60,9 @@ python vw.py
     --output <file>
     --format {json,txt,csv}
     --burp
+    --test-xss
+    --test-sqli
+    --test-cmdi
 ```
 
 #### Module Usage Examples
@@ -77,12 +73,6 @@ Generate Educational Templates
 
 ```bash
 python vw.py --module xss
-```
-
-Generate Lab Payloads (DVWA)
-
-```bash
-python vw.py --module xss --mode lab
 ```
 
 With Encoding Demonstration
@@ -125,12 +115,6 @@ Windows Patterns
 python vw.py --module cmdi --os windows
 ```
 
-Lab Mode
-
-```bash
-python vw.py --module cmdi --os linux --mode lab
-```
-
 #### Exporting Payloads
 
 JSON Export
@@ -142,19 +126,19 @@ python vw.py --module all --output payloads.json --format json
 Text Catalog Export
 
 ```bash
-python vw.py --module xss --output catalog.txt --format txt
+python vw.py --module xss --output catalog --format txt
 ```
 
 CSV Export
 
 ```bash
-python vw.py --module sqli --output sqli.csv --format csv
+python vw.py --module sqli --output sqli --format csv
 ```
 
 Burp Suite Intruder Format
 
 ```bash
-python vw.py --module xss --mode lab --burp --output burp_payloads.txt
+python vw.py --module xss --burp --output burp_payloads.txt
 ```
 
 Load the generated file in:
@@ -170,7 +154,7 @@ Set Security Level to "Low"
 Generate payload:
 
 ```bash
-python vw.py --module xss --mode lab
+python vw.py --test-xss
 ```
 
 Inject payload into vulnerable field

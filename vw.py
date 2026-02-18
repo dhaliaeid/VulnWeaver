@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
 """
-Payload Generation Framework - Educational Security Tool
+VulnWeaver - Payload Generation Framework
+Educational Security Tool for Authorized Testing
 
 ETHICAL DISCLAIMER:
 This tool is developed strictly for educational, defensive, and authorized
-penetration testing environments (e.g., DVWA/Juice Shop labs).
-Any misuse outside legal authorization is prohibited.
+penetration testing environments. Any misuse outside legal authorization is
+strictly prohibited and may be illegal.
 
 Aligned with OWASP Code of Ethics:
 https://owasp.org/www-project-code-of-ethics/
+
+ITSOLERA (PVT) LTD - Offensive Security Research
+Version: 1.0
+Date: February 2026
 """
 
 import argparse
 import sys
+import json
+from pathlib import Path
 
+# Import modules
 from modules.xss import XSSPayloadGenerator
 from modules.sqli import SQLiPayloadGenerator
 from modules.cmdi import CMDIPayloadGenerator
@@ -21,207 +29,262 @@ from modules.encoder import PayloadEncoder
 from modules.export_handler import ExportHandler
 
 
-def _indent_block(s: str, prefix: str = "  ") -> str:
-    """Indent multi-line strings for clean CLI output (left aligned blocks)."""
-    if not s:
-        return ""
-    s = str(s).strip("\n")
-    return prefix + s.replace("\n", "\n" + prefix)
 
-
-class PayloadFramework:
-    """Main framework class orchestrating payload generation."""
-
+class VulnWeaver:
+    """
+    VulnWeaver - Main framework class orchestrating payload generation
+    
+    A modular payload template generator for security education and
+    authorized penetration testing. Generates non-executing templates
+    across XSS, SQLi, and Command Injection attack vectors.
+    """
+    
     def __init__(self):
         self.encoder = PayloadEncoder()
         self.export_handler = ExportHandler()
-
+        self.version = "1.0.0"
+        
     def generate_payloads(self, args):
+        """Generate payloads based on command-line arguments"""
         payloads = []
-
-        # NOTE: not elif -> so --module all runs all modules
-        if args.module in ("xss", "all"):
+        
+        # XSS Module - runs for 'xss' or 'all'
+        if args.module in ('xss', 'all'):
             xss_gen = XSSPayloadGenerator()
             payloads.extend(xss_gen.generate_all_contexts())
-
-        if args.module in ("sqli", "all"):
-            sqli_gen = SQLiPayloadGenerator(db_type=args.db, case_variants=True)
+        
+        # SQLi Module - runs for 'sqli' or 'all'
+        if args.module in ('sqli', 'all'):
+            sqli_gen = SQLiPayloadGenerator(db_type=args.db)
             payloads.extend(sqli_gen.generate_all_types())
-
-        if args.module in ("cmdi", "all"):
+        
+        # Command Injection Module - runs for 'cmdi' or 'all'
+        if args.module in ('cmdi', 'all'):
             cmdi_gen = CMDIPayloadGenerator(os_type=args.os)
             payloads.extend(cmdi_gen.generate_all_patterns())
-
-        payloads = self._normalize_payload_dicts(payloads)
-
-        # Lab mode: ONLY if explicitly enabled + user confirms
-        if args.mode == "lab":
-            self._apply_lab_mode(payloads)
-
-        # Encoding demonstration (representation only)
-        if args.encode != "none":
+        
+        # Validate and normalize payload dicts
+        self._normalize_payloads(payloads)
+        
+        # Apply encoding if specified
+        if args.encode and args.encode != 'none':
             for p in payloads:
-                if p.get("payload"):
-                    p["encoded_payload"] = self.encoder.encode(p["payload"], args.encode)
-                    p["encoding_type"] = args.encode
-
-        # Obfuscation note (explanations only)
+                p['encoded_payload'] = self.encoder.encode(p['payload'], args.encode)
+                p['encoding_type'] = args.encode
+        
+        # Apply obfuscation note if specified
         if args.obfuscate:
             note = self._get_obfuscation_notes(args.obfuscate)
             for p in payloads:
-                p["obfuscation_notes"] = note
-
-        # Display
+                p['obfuscation_notes'] = note
+        
+        # Display results
         self._display_payloads(payloads)
-
-        # Export
+        
+        # Export if requested
         if args.output:
-            if args.burp:
-                self.export_handler.export_burp_format(payloads, args.output)
-            else:
-                self.export_handler.export(payloads, args.output, args.format)
-            print(f"\n[+] Exported: {args.output}")
-
+            self.export_handler.export(payloads, args.output, args.format)
+            print(f"\n[+] Payloads exported to: {args.output}")
+        
         return payloads
-
-    def _normalize_payload_dicts(self, payloads):
+    
+    def _normalize_payloads(self, payloads):
         """
-        Normalize keys so CLI/export doesn't crash.
-        We keep module-specific fields intact.
+        Normalize payload dicts to accept multiple naming conventions.
+        Supports both built-in module format and custom user formats.
         """
-        out = []
+        PAYLOAD_ALIASES = ('payload', 'template')
+        TITLE_ALIASES   = ('description', 'title', 'name')
+        TYPE_ALIASES    = ('type', 'module', 'category')
+        
         for i, p in enumerate(payloads):
-            if not isinstance(p, dict):
-                raise TypeError(f"Item #{i} is not a dict: {type(p)}")
-
-            item = dict(p)
-
-            # Required-ish fields
-            item.setdefault("type", item.get("module") or item.get("category") or "N/A")
-            item.setdefault("description", item.get("title") or item.get("name") or "N/A")
-            item.setdefault("context", "N/A")
-            item.setdefault("subtype", "N/A")
-
-            # Support template-only items
-            item.setdefault("template", "")
-            item.setdefault("payload", "")
-
-            out.append(item)
-        return out
-
-    def _apply_lab_mode(self, payloads):
-        """
-        LAB mode:
-        - For XSS: provide simple proof payload when templates are tokenized/empty
-        - For CMDI: keep the module lab proofs as-is (they already include lab_suitable=True)
-        - For SQLi: leave unchanged (still examples)
-        """
-        for p in payloads:
-            p["lab_mode"] = True
-
-            # XSS: if tokenized or missing payload, provide a simple proof
-            if p.get("type") == "XSS":
-                payload_text = (p.get("payload") or "") + "\n" + (p.get("template") or "")
-                looks_tokenized = "[[" in payload_text or "[PAYLOAD]" in payload_text
-                if not p.get("payload") or looks_tokenized:
-                    p["payload"] = '<img src=x onerror=alert(1)>'
-                    p["lab_note"] = "LAB_MODE: proof payload for DVWA/Juice Shop screenshots"
-
-            # CMDI: do NOT rewrite automatically. The cmdi module now provides Lab Proof items already.
-            if p.get("type") == "Command Injection":
-                p.setdefault("lab_note", "LAB_MODE: use 'Lab Proof' entries for screenshots (authorized labs only).")
-                
+            # Resolve the payload string
+            for key in PAYLOAD_ALIASES:
+                if key in p:
+                    p['payload'] = p[key]
+                    break
+            else:
+                raise KeyError(
+                    f"Payload dict at index {i} has no recognised payload key "
+                    f"(expected one of {PAYLOAD_ALIASES}). "
+                    f"Keys present: {list(p.keys())}"
+                )
+            
+            # Resolve description / title
+            if 'description' not in p:
+                for key in TITLE_ALIASES:
+                    if key in p:
+                        p['description'] = p[key]
+                        break
+            
+            # Resolve type
+            if 'type' not in p:
+                for key in TYPE_ALIASES:
+                    if key in p:
+                        p['type'] = p[key]
+                        break
+    
     def _display_payloads(self, payloads):
+        """Display generated payloads to console with rich formatting"""
         print("\n" + "=" * 80)
-        print("VulnWeaver - Generated Output (Educational / Authorized Labs Only)")
-        print("=" * 80)
-
+        print(" VULNWEAVER - GENERATED PAYLOAD TEMPLATES (EDUCATIONAL USE ONLY)")
+        print("=" * 80 + "\n")
+        
         for idx, p in enumerate(payloads, 1):
-            print(f"\n[{idx}]")
-            print(f"-Type:        {p.get('type')}")
-            print(f"-Subtype:     {p.get('subtype')}")
-            print(f"-Context:     {p.get('context')}")
-            if p.get("db_type"):
-                print(f"-DB Type:     {p.get('db_type')}")
-            if p.get("os"):
-                print(f"-OS:          {p.get('os')}")
-
-            print(f"-Description: {p.get('description')}")
-
-            if p.get("template"):
-                print("-Template:")
-                print(_indent_block(p.get("template")))
-
-            if p.get("payload"):
-                print("-Payload:")
-                print(_indent_block(p.get("payload")))
-
-            if p.get("encoded_payload"):
-                print(f"-Encoded ({p.get('encoding_type')}):")
-                print(_indent_block(p.get("encoded_payload")))
-
-            if p.get("bypass_explanation"):
-                print("-Bypass Logic:")
-                print(_indent_block(p.get("bypass_explanation")))
-
-            if p.get("defensive_notes"):
-                print("-Defense:")
-                print(_indent_block(p.get("defensive_notes")))
-
-            if p.get("obfuscation_notes"):
-                print("-Obfuscation Notes:")
-                print(_indent_block(p.get("obfuscation_notes")))
-
-            if p.get("note"):
-                print("-Note:")
-                print(_indent_block(p.get("note")))
-
-            if p.get("lab_note"):
-                print("-Lab Note:")
-                print(_indent_block(p.get("lab_note")))
-
+            print(f"[{idx}]\nType: {p.get('type', 'N/A')}")
+            
+            if 'subtype' in p:
+                print(f"Subtype:     {p['subtype']}")
+            
+            print(f"Context:     {p.get('context', 'N/A')}")
+            print(f"Description: {p.get('description', 'N/A')}")
+            print(f"Payload:     {p['payload']}")
+            
+            # Show template/simulation notes if present
+            if 'template_note' in p:
+                print(f"Usage Note:  {p['template_note']}")
+            if 'simulation_note' in p:
+                print(f"Lab Note:    {p['simulation_note']}")
+            if 'study_note' in p:
+                print(f"Study Note:  {p['study_note']}")
+            
+            # Show encoded version if encoding was applied
+            if 'encoded_payload' in p:
+                print(f"Encoded ({p['encoding_type']}): {p['encoded_payload']}")
+            
+            # Show bypass/defensive info
+            if 'bypass_explanation' in p:
+                print(f"Bypass Logic: {p['bypass_explanation']}")
+            
+            if 'defensive_notes' in p:
+                print(f"Defense: {p['defensive_notes']}")
+            
+            # Show any additional notes
+            if 'note' in p:
+                print(f"Note: {p['note']}")
+            
             print("-" * 80)
-
-    @staticmethod
-    def _get_obfuscation_notes(obf_type):
+    
+    def _get_obfuscation_notes(self, obf_type):
+        """Return obfuscation technique explanation"""
         notes = {
-            "comment": "Comment insertion breaks signature-based detection (denylist matching).",
-            "whitespace": "Whitespace abuse exploits weak tokenization (filters check only spaces).",
-            "mixed": "Mixed encoding can bypass single-pass decoders (normalize/validate order issues).",
+            'comment':    'Comment insertion breaks signature-based detection',
+            'whitespace': 'Whitespace abuse exploits poor tokenization',
+            'mixed':      'Mixed encoding bypasses single-pass decoders',
         }
-        return notes.get(obf_type, "Custom obfuscation applied.")
+        return notes.get(obf_type, 'Custom obfuscation applied')
 
 
-def show_examples():
-    print(
-        r"""
-USAGE EXAMPLES:
-===============
+def show_dvwa_xss():
+    """Display DVWA XSS test payloads"""
+    print("""
+╔═══════════════════════════════════════════════════════════════╗
+║  XSS PAYLOADS FOR TESTING                                     ║
+╚═══════════════════════════════════════════════════════════════╝
 
-1) Template-only (default):
-   python3 vw.py --module xss
-   python3 vw.py --module sqli --db mysql
-   python3 vw.py --module cmdi --os linux
+⚠️  USE ONLY IN DVWA OR OTHER AUTHORIZED LAB ENVIRONMENTS
 
-2) Export to JSON/TXT/CSV:
-   python3 vw.py --module all --output out.json --format json
-   python3 vw.py --module all --output out.txt  --format txt
-   python3 vw.py --module all --output out.csv  --format csv
+PAYLOAD #1 — Basic Script Tag
+============================================================
+Template:     <script>[PAYLOAD]</script>
+Test:    <script>alert(1)</script>
+Page:    vulnerabilities/xss_r/
+How to Test:  Paste into the "What's your name?" input field
+Expected:     Alert box pops up with '1'
 
-3) Encoding demo:
-   python3 vw.py --module xss --encode url
-   python3 vw.py --module sqli --encode hex
+PAYLOAD #2 — Image onerror Event
+============================================================
+Template:     <img src=x onerror=[PAYLOAD]>
+Test:    <img src=x onerror=alert(1)>
+Page:    vulnerabilities/xss_r/
+How to Test:  Paste into the "What's your name?" input field
+Expected:     Alert box pops up with '1'
 
-4) Burp payload list export (offline):
-   python3 vw.py --module sqli --burp --output burp_payloads.txt
+""")
 
-5) LAB MODE (DVWA/Juice Shop screenshots only):
-   python3 vw.py --module xss --mode lab --i-understand
-"""
-    )
+
+def show_dvwa_sqli():
+    """Display DVWA SQLi test payloads"""
+    print("""
+╔═══════════════════════════════════════════════════════════════╗
+║  SQLi PAYLOADS FOR TESTING                                    ║
+╚═══════════════════════════════════════════════════════════════╝
+
+⚠️  USE ONLY IN DVWA OR OTHER AUTHORIZED LAB ENVIRONMENTS
+
+PAYLOAD #1 — Authentication Bypass (Always TRUE)
+============================================================
+Template:     ' OR '1'='1
+DVWA Test:    1' OR '1'='1
+DVWA Page:    vulnerabilities/sqli/
+How to Test:  Enter in "User ID" field, click Submit
+Expected:     Returns first user in database (usually admin)
+
+EXPLANATION:
+  Original Query: SELECT first_name, surname FROM users WHERE user_id = '[INPUT]'
+  Becomes:        SELECT first_name, surname FROM users WHERE user_id = '1' OR '1'='1'
+  Result:         WHERE clause is always TRUE — returns all rows
+
+PAYLOAD #2 — UNION SELECT (Version Disclosure)
+============================================================
+Template:     ' UNION SELECT NULL,NULL
+DVWA Test:    1' UNION SELECT NULL,version()#
+DVWA Page:    vulnerabilities/sqli/
+How to Test:  Enter in "User ID" field, click Submit
+Expected:     Displays MySQL version in the surname field
+
+EXPLANATION:
+  Original Query: SELECT first_name, surname FROM users WHERE user_id = '[INPUT]'
+  Becomes:        SELECT first_name, surname FROM users WHERE user_id = '1' UNION SELECT NULL,version()#'
+  Result:         UNION appends MySQL version() output as a second result row
+  Note:           # symbol comments out the trailing ' quote
+
+""")
+
+
+def show_dvwa_cmdi():
+    """Display DVWA Command Injection test payloads"""
+    print("""
+╔═══════════════════════════════════════════════════════════════╗
+║  COMMAND INJECTION PAYLOADS FOR TESTING                       ║
+╚═══════════════════════════════════════════════════════════════╝
+
+⚠️  USE ONLY IN DVWA OR OTHER AUTHORIZED LAB ENVIRONMENTS
+
+PAYLOAD #1 — Semicolon Separator (Sequential Execution)
+============================================================
+Template:     [VALID_IP] ; [COMMAND]
+DVWA Test:    127.0.0.1 ; whoami
+DVWA Page:    vulnerabilities/exec/
+How to Test:  Enter in "IP address" field, click Submit
+Expected:     Shows ping output, then displays current Linux username (likely www-data)
+
+EXPLANATION:
+  Original Command: ping -c 4 [INPUT]
+  Becomes:          ping -c 4 127.0.0.1 ; whoami
+  Result:           Ping runs first, then whoami executes
+  Why it works:     Semicolon chains commands — both run regardless of exit status
+
+PAYLOAD #2 — Pipe Separator (Output Chaining)
+============================================================
+Template:     [VALID_IP] | [COMMAND]
+DVWA Test:    127.0.0.1 | cat /etc/passwd
+DVWA Page:    vulnerabilities/exec/
+How to Test:  Enter in "IP address" field, click Submit
+Expected:     Displays contents of /etc/passwd (system users list)
+
+EXPLANATION:
+  Original Command: ping -c 4 [INPUT]
+  Becomes:          ping -c 4 127.0.0.1 | cat /etc/passwd
+  Result:           Pipe passes ping output to cat (which ignores it), then cat reads /etc/passwd
+  Why it works:     Pipe operator chains commands — second always executes
+
+""")
 
 
 def main():
+    """Main entry point with argument parsing"""
+    
     banner = r"""
  ██╗   ██╗██╗   ██╗██╗     ███╗   ██╗    ██╗    ██╗███████╗ █████╗ ██╗   ██╗███████╗██████╗
  ██║   ██║██║   ██║██║     ████╗  ██║    ██║    ██║██╔════╝██╔══██╗██║   ██║██╔════╝██╔══██╗
@@ -234,48 +297,249 @@ def main():
     print(banner)
     print("Educational Payload Generation Framework - Authorized Testing Only")
     print("=" * 80)
-
+    
     parser = argparse.ArgumentParser(
-        description="VulnWeaver - Educational Payload Generation Framework (No auto sending)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='VulnWeaver - Educational Payload Generation Framework',
+        epilog='Example: python payload_gen.py --module xss --encode url --output payloads.json',
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-
-    parser.add_argument("--module", choices=["xss", "sqli", "cmdi", "all"], required=True, help="Module to generate")
+    
+    # Core arguments
     parser.add_argument(
-        "--mode",
-        choices=["template", "lab"],
-        default="template",
-        help="template=non-executing templates (default), lab=proof payloads for DVWA/Juice Shop screenshots",
+        '--module',
+        choices=['xss', 'sqli', 'cmdi', 'all'],
+        required=False,
+        help='Payload module to use'
     )
-
-    parser.add_argument("--encode", choices=["url", "base64", "hex", "none"], default="none", help="Encoding demo")
-    parser.add_argument("--db", choices=["mysql", "postgresql", "mssql"], default="mysql", help="DB type for SQLi")
-    parser.add_argument("--os", choices=["linux", "windows", "both"], default="linux", help="OS type for CMDi")
-    parser.add_argument("--enable-cmd-examples", action="store_true", help="Enable example command strings in CMDi (still offline)")
-
-    parser.add_argument("--obfuscate", choices=["comment", "whitespace", "mixed"], help="Add obfuscation notes")
-    parser.add_argument("--output", help="Export file path")
-    parser.add_argument("--format", choices=["json", "txt", "csv"], default="json", help="Export format")
-    parser.add_argument("--burp", action="store_true", help="Export a Burp Intruder payload list (offline)")
-    parser.add_argument("--examples", action="store_true", help="Show examples and exit")
-
+    
+    parser.add_argument(
+        '--encode',
+        choices=['url', 'base64', 'hex', 'none'],
+        default='none',
+        help='Encoding type to apply'
+    )
+    
+    parser.add_argument(
+        '--db',
+        choices=['mysql', 'postgresql', 'mssql', 'oracle'],
+        default='mysql',
+        help='Database type for SQLi payloads'
+    )
+    
+    parser.add_argument(
+        '--os',
+        choices=['linux', 'windows', 'both'],
+        default='linux',
+        help='Operating system for command injection'
+    )
+    
+    parser.add_argument(
+        '--obfuscate',
+        choices=['comment', 'whitespace', 'mixed'],
+        help='Obfuscation technique to demonstrate'
+    )
+    
+    parser.add_argument(
+        '--output',
+        help='Output file path for export'
+    )
+    
+    parser.add_argument(
+        '--format',
+        choices=['json', 'txt', 'csv'],
+        default='json',
+        help='Export format'
+    )
+    
+    parser.add_argument(
+        '--burp',
+        action='store_true',
+        help='Export in Burp Suite compatible format'
+    )
+    
+    parser.add_argument(
+        '--examples',
+        action='store_true',
+        help='Show usage examples and exit'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='store_true',
+        help='Show version information and exit'
+    )
+    
+    # DVWA test payload flags
+    parser.add_argument(
+        '--test-xss',
+        action='store_true',
+        help='Show 2 ready-to-use XSS payloads for DVWA testing'
+    )
+    
+    parser.add_argument(
+        '--test-sqli',
+        action='store_true',
+        help='Show 2 ready-to-use SQLi payloads for DVWA testing'
+    )
+    
+    parser.add_argument(
+        '--test-cmdi',
+        action='store_true',
+        help='Show 2 ready-to-use command injection payloads for DVWA testing'
+    )
+    
     args = parser.parse_args()
-
+    
+    # Show version if requested
+    if args.version:
+        print(f"VulnWeaver v1.0.0")
+        print(f"ITSOLERA (PVT) LTD - Offensive Security Research")
+        print(f"February 2026")
+        sys.exit(0)
+    
+    # Show examples if requested
     if args.examples:
         show_examples()
         sys.exit(0)
-
-    fw = PayloadFramework()
-
+    
+    # Show DVWA test payloads if requested
+    if args.test_xss:
+        show_dvwa_xss()
+        sys.exit(0)
+    
+    if args.test_sqli:
+        show_dvwa_sqli()
+        sys.exit(0)
+    
+    if args.test_cmdi:
+        show_dvwa_cmdi()
+        sys.exit(0)
+    
+    # Module is required if not showing version, examples, or DVWA tests
+    if not args.module:
+        parser.error('the --module argument is required')
+    
+    # Initialize framework
+    framework = VulnWeaver()
+    
+    # Generate payloads
     try:
-        payloads = fw.generate_payloads(args)
-        print(f"\n[✓] Generated {len(payloads)} items successfully.")
-        if args.mode == "lab":
-            print("[!] LAB MODE is ON: generate screenshots only on DVWA/Juice Shop.")
-    except Exception as e:
+        payloads = framework.generate_payloads(args)
+        print(f"\n[✓] VulnWeaver generated {len(payloads)} payload templates successfully")
+        print("\n[!] REMINDER: These are educational templates for authorized testing only!")
+        
+    except KeyError as e:
         print(f"\n[!] Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n[!] Unexpected error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
-if __name__ == "__main__":
+def show_examples():
+    """Display usage examples"""
+    print("""
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  VULNWEAVER - USAGE EXAMPLES                                              ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+BASIC GENERATION:
+═════════════════
+
+1. Generate XSS payloads (all contexts):
+   python payload_gen.py --module xss
+
+2. Generate SQL injection payloads for MySQL:
+   python payload_gen.py --module sqli --db mysql
+
+3. Generate command injection patterns for Linux:
+   python payload_gen.py --module cmdi --os linux
+
+4. Generate all payload types:
+   python payload_gen.py --module all
+
+
+DVWA QUICK TESTING:
+═══════════════════
+
+5. Show DVWA XSS test payloads (2 ready-to-paste):
+   python payload_gen.py --dvwa-xss
+
+6. Show DVWA SQLi test payloads (2 ready-to-paste):
+   python payload_gen.py --dvwa-sqli
+
+7. Show DVWA CMDi test payloads (2 ready-to-paste):
+   python payload_gen.py --dvwa-cmdi
+
+
+WITH ENCODING:
+══════════════
+
+8. Generate XSS payloads with URL encoding:
+   python payload_gen.py --module xss --encode url
+
+9. Generate SQLi payloads with Base64 encoding:
+   python payload_gen.py --module sqli --encode base64 --db postgresql
+
+
+EXPORT OPTIONS:
+═══════════════
+
+10. Export to JSON file:
+    python payload_gen.py --module xss --output xss_payloads.json
+
+11. Export to text catalog:
+    python payload_gen.py --module sqli --output sqli.txt --format txt
+
+12. Export to CSV for analysis:
+    python payload_gen.py --module all --output all.csv --format csv
+
+13. Export for Burp Suite Intruder:
+    python payload_gen.py --module xss --burp --output burp_xss.txt
+
+
+ADVANCED USAGE:
+═══════════════
+
+14. Generate Windows command injection patterns:
+    python payload_gen.py --module cmdi --os windows
+
+15. Generate cross-platform command injection:
+    python payload_gen.py --module cmdi --os both
+
+16. Generate MSSQL-specific SQLi payloads:
+    python payload_gen.py --module sqli --db mssql
+
+17. Generate with obfuscation notes:
+    python payload_gen.py --module xss --obfuscate comment
+
+18. Full pipeline example:
+    python payload_gen.py --module all --encode url --output full_suite.json
+
+
+OTHER OPTIONS:
+══════════════
+
+--version     Show VulnWeaver version
+--examples    Show this help (you're reading it now!)
+
+
+ETHICAL REMINDER:
+═════════════════
+✓ Always obtain written authorization before testing
+✓ Use only in lab environments (DVWA, bWAPP, WebGoat, etc.)
+✓ Never test on production systems without proper approval
+✓ Follow OWASP Code of Ethics at all times
+
+Unauthorized access is illegal and unethical.
+When in doubt, don't test — ask for permission first.
+
+═══════════════════════════════════════════════════════════════════════════
+For more information, see README.md and ETHICAL_GUIDELINES.md
+""")
+
+
+if __name__ == '__main__':
     main()
