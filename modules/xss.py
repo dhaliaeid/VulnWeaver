@@ -83,11 +83,9 @@ Tokenized pattern: <[[HTML_TAG]] [[ATTR_NAME]]="[[ATTR_VALUE]]">
                 "HTML",
                 "Stored XSS lifecycle concept",
                 """
-Data flow:
-[[USER_INPUT]] -> Database -> Rendered later
+Data flow: [[USER_INPUT]] -> Database -> Rendered later
 
-Render position:
-<div class="comment">[[STORED_INPUT]]</div>
+Render position: <div class="comment">[[STORED_INPUT]]</div>
 """,
                 "Demonstrates stored XSS where malicious input persists.",
                 "Stored input increases impact because multiple users are affected.",
@@ -106,11 +104,9 @@ Render position:
                 "Attribute",
                 "Quoted attribute breakout concept",
                 """
-Injection position:
-<a href="[[USER_INPUT]]">Link</a>
+Injection position: <a href="[[USER_INPUT]]">Link</a>
 
-Conceptual breakout pattern:
-" [[EVENT_ATTR]]="[[JS_EXPRESSION]]"
+Conceptual breakout pattern: "[[EVENT_ATTR]]="[[JS_EXPRESSION]]"
 """,
                 "Shows how improper quote encoding leads to attribute injection.",
                 "Escaping < and > is insufficient if quotes are not encoded.",
@@ -122,14 +118,11 @@ Conceptual breakout pattern:
                 "Attribute",
                 "Unsafe URL scheme concept",
                 """
-Injection position:
-href="[[USER_INPUT]]"
+Injection position: href="[[USER_INPUT]]"
 
-Concept:
-[[URL_SCHEME]]:[[JS_EXPRESSION]]
+Concept: [[URL_SCHEME]]:[[JS_EXPRESSION]]
 
-Encoding representation:
-[[ENCODED(URL_SCHEME)]]:[[JS_EXPRESSION]]
+Encoding representation: [[ENCODED(URL_SCHEME)]]:[[JS_EXPRESSION]]
 """,
                 "Demonstrates risk of unsafe URL schemes.",
                 "If validation occurs before decoding, encoded values may bypass checks.",
@@ -169,10 +162,7 @@ Conceptual pattern:
 Injection position:
 const msg = `Hello [[USER_INPUT]]`;
 
-Conceptual pattern:
-[[TEMPLATE_LITERAL_BREAK]]
-[[JS_EXPRESSION]]
-[[TEMPLATE_LITERAL_RESUME]]
+Conceptual pattern: [[TEMPLATE_LITERAL_BREAK]][[JS_EXPRESSION]][[TEMPLATE_LITERAL_RESUME]]
 """,
                 "Shows risks in ES6 template literals.",
                 "Filters that handle only single/double quotes miss backticks.",
@@ -191,14 +181,11 @@ Conceptual pattern:
                 "DOM",
                 "Client-side source-to-sink flow",
                 """
-Source:
-[[SOURCE]] (e.g., location.search/hash)
+Source: [[SOURCE]] (e.g., location.search/hash)
 
-Sink:
-[[SINK:innerHTML/document.write]]
+Sink: [[SINK:innerHTML/document.write]]
 
-Concept:
-Untrusted client-side data reaches dangerous sink.
+Concept: Untrusted client-side data reaches dangerous sink.
 """,
                 "Demonstrates DOM-based XSS concept.",
                 "Fragment identifiers never reach the server.",
@@ -232,14 +219,11 @@ Conceptual pattern:
                 "Encoding",
                 "Encoding normalization concept",
                 """
-Raw input:
-[[USER_INPUT]]
+Raw input: [[USER_INPUT]]
 
-URL encoded:
-[[ENCODED_URL(USER_INPUT)]]
+URL encoded: [[ENCODED_URL(USER_INPUT)]]
 
-Double encoded:
-[[ENCODED_URL(ENCODED_URL(USER_INPUT))]]
+Double encoded: [[ENCODED_URL(ENCODED_URL(USER_INPUT))]]
 """,
                 "Demonstrates encoding-based bypass logic.",
                 "Filtering before decoding can miss dangerous characters.",
@@ -252,9 +236,7 @@ Double encoded:
                 "Case manipulation",
                 "Case sensitivity bypass concept",
                 """
-Concept:
-<[[MIXED_CASE_TOKEN]]>
-</[[MIXED_CASE_TOKEN]]>
+Concept: <[[MIXED_CASE_TOKEN]]></[[MIXED_CASE_TOKEN]]>
 """,
                 "Shows case-insensitive parsing behavior.",
                 "Case-sensitive denylist filtering is weak.",
