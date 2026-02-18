@@ -427,74 +427,74 @@ BASIC GENERATION:
 ═════════════════
 
 1. Generate XSS payloads (all contexts):
-   python payload_gen.py --module xss
+   python vw.py --module xss
 
 2. Generate SQL injection payloads for MySQL:
-   python payload_gen.py --module sqli --db mysql
+   python vw.py --module sqli --db mysql
 
 3. Generate command injection patterns for Linux:
-   python payload_gen.py --module cmdi --os linux
+   python vw.py --module cmdi --os linux
 
 4. Generate all payload types:
-   python payload_gen.py --module all
+   python vw.py --module all
 
 
 DVWA QUICK TESTING:
 ═══════════════════
 
 5. Show DVWA XSS test payloads (2 ready-to-paste):
-   python payload_gen.py --dvwa-xss
+   python vw.py --dvwa-xss
 
 6. Show DVWA SQLi test payloads (2 ready-to-paste):
-   python payload_gen.py --dvwa-sqli
+   python vw.py --dvwa-sqli
 
 7. Show DVWA CMDi test payloads (2 ready-to-paste):
-   python payload_gen.py --dvwa-cmdi
+   python vw.py --dvwa-cmdi
 
 
 WITH ENCODING:
 ══════════════
 
 8. Generate XSS payloads with URL encoding:
-   python payload_gen.py --module xss --encode url
+   python vw.py --module xss --encode url
 
 9. Generate SQLi payloads with Base64 encoding:
-   python payload_gen.py --module sqli --encode base64 --db postgresql
+   python vw.py --module sqli --encode base64 --db postgresql
 
 
 EXPORT OPTIONS:
 ═══════════════
 
 10. Export to JSON file:
-    python payload_gen.py --module xss --output xss_payloads.json
+    python vw.py --module xss --output xss_payloads.json
 
 11. Export to text catalog:
-    python payload_gen.py --module sqli --output sqli.txt --format txt
+    python vw.py --module sqli --output sqli.txt --format txt
 
 12. Export to CSV for analysis:
-    python payload_gen.py --module all --output all.csv --format csv
+    python vw.py --module all --output all.csv --format csv
 
 13. Export for Burp Suite Intruder:
-    python payload_gen.py --module xss --burp --output burp_xss.txt
+    python vw.py --module xss --burp --output burp_xss.txt
 
 
 ADVANCED USAGE:
 ═══════════════
 
 14. Generate Windows command injection patterns:
-    python payload_gen.py --module cmdi --os windows
+    python vw.py --module cmdi --os windows
 
 15. Generate cross-platform command injection:
-    python payload_gen.py --module cmdi --os both
+    python vw.py --module cmdi --os both
 
 16. Generate MSSQL-specific SQLi payloads:
-    python payload_gen.py --module sqli --db mssql
+    python vw.py --module sqli --db mssql
 
 17. Generate with obfuscation notes:
-    python payload_gen.py --module xss --obfuscate comment
+    python vw.py --module xss --obfuscate comment
 
 18. Full pipeline example:
-    python payload_gen.py --module all --encode url --output full_suite.json
+    python vw.py --module all --encode url --output full_suite.json
 
 
 OTHER OPTIONS:
